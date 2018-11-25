@@ -93,10 +93,9 @@ remove(`volatility`, `volatility - 4w`, `volatility - 8w`,
 
 #### Wrap up
 ```{r `historic final`, message = FALSE, warning = FALSE}
-historic %<>% dplyr::mutate(month = paste(lubridate::year(Date), lubridate::month(Date), sep = "-"), 
-                            date = Date) %>%
-  dplyr::group_by(name, month) %>% dplyr::filter(dplyr::row_number() == n()) %>% 
-  dplyr::ungroup() %>% dplyr::select(-c("Date", "n", "month")) %>% 
+historic %<>% dplyr::mutate(year = lubridate::year(Date), month = lubridate::month(Date), date = Date) %>%
+  dplyr::group_by(name, year, month) %>% dplyr::filter(dplyr::row_number() == n()) %>% 
+  dplyr::ungroup() %>% dplyr::select(-c("Date", "n", "year", "month")) %>% 
   tidyr::gather(feature, value, -c("date", "name"))
 ```
 

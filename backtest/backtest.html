@@ -315,11 +315,11 @@ $(document).ready(function () {
 
 <div id="load" class="section level2">
 <h2>Load</h2>
-<pre class="r"><code>historic &lt;- readr::read_csv(file = &quot;../data/raw/data_price_etf.csv&quot;) %&gt;%
+<pre class="r"><code>historic &lt;- readr::read_csv(file = &quot;../data/data_historic_etf.csv&quot;) %&gt;%
   dplyr::mutate(Date = as.Date(Date)) %&gt;% dplyr::arrange(Date) %&gt;%
   tidyr::gather(`name`, price, -Date) %&gt;% dplyr::mutate(price = as.numeric(price)) %&gt;% 
   dplyr::filter(complete.cases(.))
-static &lt;- readr::read_csv(file = &quot;../data/raw/data_static_etf_com.csv&quot;)</code></pre>
+static &lt;- readr::read_csv(file = &quot;../data/data_static_etf.csv&quot;)</code></pre>
 </div>
 <div id="transform" class="section level2">
 <h2>Transform</h2>
@@ -391,10 +391,9 @@ remove(`volatility`, `volatility - 4w`, `volatility - 8w`,
 </div>
 <div id="wrap-up" class="section level4">
 <h4>Wrap up</h4>
-<pre class="r"><code>historic %&lt;&gt;% dplyr::mutate(month = paste(lubridate::year(Date), lubridate::month(Date), sep = &quot;-&quot;), 
-                            date = Date) %&gt;%
-  dplyr::group_by(name, month) %&gt;% dplyr::filter(dplyr::row_number() == n()) %&gt;% 
-  dplyr::ungroup() %&gt;% dplyr::select(-c(&quot;Date&quot;, &quot;n&quot;, &quot;month&quot;)) %&gt;% 
+<pre class="r"><code>historic %&lt;&gt;% dplyr::mutate(year = lubridate::year(Date), month = lubridate::month(Date), date = Date) %&gt;%
+  dplyr::group_by(name, year, month) %&gt;% dplyr::filter(dplyr::row_number() == n()) %&gt;% 
+  dplyr::ungroup() %&gt;% dplyr::select(-c(&quot;Date&quot;, &quot;n&quot;, &quot;year&quot;, &quot;month&quot;)) %&gt;% 
   tidyr::gather(feature, value, -c(&quot;date&quot;, &quot;name&quot;))</code></pre>
 </div>
 </div>
