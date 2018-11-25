@@ -327,11 +327,9 @@ static &lt;- readr::read_csv(file = &quot;../data/data_static_etf.csv&quot;)</co
 <h3>Historic features</h3>
 <div id="returns" class="section level4">
 <h4>Returns</h4>
-<pre class="r"><code>sizes &lt;- dplyr::group_by(historic, `name`) %&gt;%
-  dplyr::summarise(n = n())
+<pre class="r"><code>sizes &lt;- dplyr::group_by(historic, `name`) %&gt;% dplyr::summarise(n = n())
 
-historic %&lt;&gt;% dplyr::group_by(`name`) %&gt;%
-  dplyr::left_join(sizes, by = &quot;name&quot;) %&gt;%
+historic %&lt;&gt;% dplyr::group_by(`name`) %&gt;% dplyr::left_join(sizes, by = &quot;name&quot;) %&gt;%
   dplyr::mutate(
     `return - 1w` = price / dplyr::lag(price, n = 1L) - 1L,
     `return - 4w` = price / dplyr::lag(price, n = 4L) - 1L,
@@ -347,11 +345,11 @@ remove(sizes)</code></pre>
 <h4>High - low</h4>
 <pre class="r"><code>`high - low` &lt;- function(x) max(x) - min(x)
 
-`high - low - 4w` &lt;- rollify(`high - low`, window = 4L)
-`high - low - 8w` &lt;- rollify(`high - low`, window = 8L)
-`high - low - 13w` &lt;- rollify(`high - low`, window = 13L)
-`high - low - 26w` &lt;- rollify(`high - low`, window = 26L)
-`high - low - 52w` &lt;- rollify(`high - low`, window = 52L)
+`high - low - 4w` &lt;- tibbletime::rollify(`high - low`, window = 4L)
+`high - low - 8w` &lt;- tibbletime::rollify(`high - low`, window = 8L)
+`high - low - 13w` &lt;- tibbletime::rollify(`high - low`, window = 13L)
+`high - low - 26w` &lt;- tibbletime::rollify(`high - low`, window = 26L)
+`high - low - 52w` &lt;- tibbletime::rollify(`high - low`, window = 52L)
 
 historic %&lt;&gt;% dplyr::mutate(
   `high - low - 4w` = `high - low - 4w`(price),
@@ -368,11 +366,11 @@ remove(`high - low`, `high - low - 4w`, `high - low - 8w`,
 <h4>Volatility</h4>
 <pre class="r"><code>`volatility` &lt;- function(x) sd(x, na.rm = TRUE) * sqrt(52L)
 
-`volatility - 4w` &lt;- rollify(`volatility`, window = 4L)
-`volatility - 8w` &lt;- rollify(`volatility`, window = 8L)
-`volatility - 13w` &lt;- rollify(`volatility`, window = 13L)
-`volatility - 26w` &lt;- rollify(`volatility`, window = 26L)
-`volatility - 52w` &lt;- rollify(`volatility`, window = 52L)
+`volatility - 4w` &lt;- tibbletime::rollify(`volatility`, window = 4L)
+`volatility - 8w` &lt;- tibbletime::rollify(`volatility`, window = 8L)
+`volatility - 13w` &lt;- tibbletime::rollify(`volatility`, window = 13L)
+`volatility - 26w` &lt;- tibbletime::rollify(`volatility`, window = 26L)
+`volatility - 52w` &lt;- tibbletime::rollify(`volatility`, window = 52L)
 
 historic %&lt;&gt;% dplyr::mutate(
   `volatility - 4w` = `volatility - 4w`(`return - 1w`),

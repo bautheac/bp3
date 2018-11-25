@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include = FALSE}
-library(magrittr); library(tibbletime)
+library(magrittr)
 knitr::opts_chunk$set(echo = TRUE, comment = "#>")
 ```
 
@@ -26,11 +26,9 @@ static <- readr::read_csv(file = "../data/data_static_etf.csv")
 
 #### Returns
 ```{r returns, messae = FALSE, warning = FALSE}
-sizes <- dplyr::group_by(historic, `name`) %>%
-  dplyr::summarise(n = n())
+sizes <- dplyr::group_by(historic, `name`) %>% dplyr::summarise(n = n())
 
-historic %<>% dplyr::group_by(`name`) %>%
-  dplyr::left_join(sizes, by = "name") %>%
+historic %<>% dplyr::group_by(`name`) %>% dplyr::left_join(sizes, by = "name") %>%
   dplyr::mutate(
     `return - 1w` = price / dplyr::lag(price, n = 1L) - 1L,
     `return - 4w` = price / dplyr::lag(price, n = 4L) - 1L,
@@ -47,11 +45,11 @@ remove(sizes)
 ```{r `high - low`, message = FALSE, warning = FALSE}
 `high - low` <- function(x) max(x) - min(x)
 
-`high - low - 4w` <- rollify(`high - low`, window = 4L)
-`high - low - 8w` <- rollify(`high - low`, window = 8L)
-`high - low - 13w` <- rollify(`high - low`, window = 13L)
-`high - low - 26w` <- rollify(`high - low`, window = 26L)
-`high - low - 52w` <- rollify(`high - low`, window = 52L)
+`high - low - 4w` <- tibbletime::rollify(`high - low`, window = 4L)
+`high - low - 8w` <- tibbletime::rollify(`high - low`, window = 8L)
+`high - low - 13w` <- tibbletime::rollify(`high - low`, window = 13L)
+`high - low - 26w` <- tibbletime::rollify(`high - low`, window = 26L)
+`high - low - 52w` <- tibbletime::rollify(`high - low`, window = 52L)
 
 historic %<>% dplyr::mutate(
   `high - low - 4w` = `high - low - 4w`(price),
@@ -69,11 +67,11 @@ remove(`high - low`, `high - low - 4w`, `high - low - 8w`,
 ```{r volatility, message = FALSE, warning = FALSE}
 `volatility` <- function(x) sd(x, na.rm = TRUE) * sqrt(52L)
 
-`volatility - 4w` <- rollify(`volatility`, window = 4L)
-`volatility - 8w` <- rollify(`volatility`, window = 8L)
-`volatility - 13w` <- rollify(`volatility`, window = 13L)
-`volatility - 26w` <- rollify(`volatility`, window = 26L)
-`volatility - 52w` <- rollify(`volatility`, window = 52L)
+`volatility - 4w` <- tibbletime::rollify(`volatility`, window = 4L)
+`volatility - 8w` <- tibbletime::rollify(`volatility`, window = 8L)
+`volatility - 13w` <- tibbletime::rollify(`volatility`, window = 13L)
+`volatility - 26w` <- tibbletime::rollify(`volatility`, window = 26L)
+`volatility - 52w` <- tibbletime::rollify(`volatility`, window = 52L)
 
 historic %<>% dplyr::mutate(
   `volatility - 4w` = `volatility - 4w`(`return - 1w`),
