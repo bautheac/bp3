@@ -1,0 +1,110 @@
+---
+title: "backtest"
+author: "Olivier Bauthéac"
+date: "24/11/2018"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+library(magrittr); library(tibbletime)
+knitr::opts_chunk$set(echo = TRUE, comment = "#>")
+```
+
+## Load
+
+```{r load, message = FALSE, warning = FALSE}
+historic <- readr::read_csv(file = "../data/data_historic_etf.csv") %>%
+  dplyr::mutate(Date = as.Date(Date)) %>% dplyr::arrange(Date) %>%
+  tidyr::gather(`name`, price, -Date) %>% dplyr::mutate(price = as.numeric(price)) %>% 
+  dplyr::filter(complete.cases(.))
+static <- readr::read_csv(file = "../data/data_static_etf.csv")
+```
+
+## Transform
+
+### Historic features
+
+#### Returns
+```{r returns, messae = FALSE, warning = FALSE}
+sizes <- dplyr::group_by(historic, `name`) %>%
+  dplyr::summarise(n = n())
+
+historic %<>% dplyr::group_by(`name`) %>%
+  dplyr::left_join(sizes, by = "name") %>%
+  dplyr::mutate(
+    `return - 1w` = price / dplyr::lag(price, n = 1L) - 1L,
+    `return - 4w` = price / dplyr::lag(price, n = 4L) - 1L,
+    `return - 8w` = price / dplyr::lag(price, n = 8L) - 1L,
+    `return - 13w` = price / dplyr::lag(price, n = 13L) - 1L,
+    `return - 26w` = price / dplyr::lag(price, n = 26L) - 1L,
+    `return - 52w` = price / dplyr::lag(price, n = 52L) - 1L
+    )
+
+remove(sizes)
+```
+
+#### High - low
+```{r `high - low`, message = FALSE, warning = FALSE}
+`high - low` <- function(x) max(x) - min(x)
+
+`high - low - 4w` <- rollify(`high - low`, window = 4L)
+`high - low - 8w` <- rollify(`high - low`, window = 8L)
+`high - low - 13w` <- rollify(`high - low`, window = 13L)
+`high - low - 26w` <- rollify(`high - low`, window = 26L)
+`high - low - 52w` <- rollify(`high - low`, window = 52L)
+
+historic %<>% dplyr::mutate(
+  `high - low - 4w` = `high - low - 4w`(price),
+  `high - low - 8w` = `high - low - 8w`(price),
+  `high - low - 13w` = `high - low - 13w`(price),
+  `high - low - 26w` = ifelse(`n` > 26L, `high - low - 26w`(price), NA),
+  `high - low - 52w` = ifelse(`n` > 52L, `high - low - 52w`(price), NA)
+  )
+
+remove(`high - low`, `high - low - 4w`, `high - low - 8w`, 
+       `high - low - 13w`, `high - low - 26w`, `high - low - 52w`)
+```
+
+#### Volatility
+```{r volatility, message = FALSE, warning = FALSE}
+`volatility` <- function(x) sd(x, na.rm = TRUE) * sqrt(52L)
+
+`volatility - 4w` <- rollify(`volatility`, window = 4L)
+`volatility - 8w` <- rollify(`volatility`, window = 8L)
+`volatility - 13w` <- rollify(`volatility`, window = 13L)
+`volatility - 26w` <- rollify(`volatility`, window = 26L)
+`volatility - 52w` <- rollify(`volatility`, window = 52L)
+
+historic %<>% dplyr::mutate(
+  `volatility - 4w` = `volatility - 4w`(`return - 1w`),
+  `volatility - 8w` = `volatility - 8w`(`return - 1w`),
+  `volatility - 13w` = `volatility - 13w`(`return - 1w`),
+  `volatility - 26w` = ifelse(`n` > 26L, `volatility - 26w`(`return - 1w`), NA),
+  `volatility - 52w` = ifelse(`n` > 52L, `volatility - 52w`(`return - 1w`), NA)
+  )
+
+remove(`volatility`, `volatility - 4w`, `volatility - 8w`, 
+       `volatility - 13w`, `volatility - 26w`, `volatility - 52w`)
+```
+
+#### TDA
+????
+  
+
+#### Wrap up
+```{r `historic final`, message = FALSE, warning = FALSE}
+historic %<>% dplyr::mutate(month = paste(lubridate::year(Date), lubridate::month(Date), sep = "-"), 
+                            date = Date) %>%
+  dplyr::group_by(name, month) %>% dplyr::filter(dplyr::row_number() == n()) %>% 
+  dplyr::ungroup() %>% dplyr::select(-c("Date", "n", "month")) %>% 
+  tidyr::gather(feature, value, -c("date", "name"))
+```
+
+
+
+
+
+
+
+
+
