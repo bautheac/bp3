@@ -113,40 +113,38 @@ previous 52-week price history to TDA functions. The output dataset in
 the original github repo shows 100 values (columns) for each name (row):
 
 ``` r
-tibble::as.tibble(read.csv("../data/001_data_prices_20072007_18072008.csv"))
+tibble::as.tibble(read.csv("../data/TDA_features_tr.csv"))
 ```
 
-    #> # A tibble: 52 x 304
-    #>     ADRA  ADRD  ADRE  ADRU   AGG  AUSE  AXJL   BIL   BIV   BLV   BND   BSV
-    #>    <dbl> <dbl> <dbl> <dbl> <dbl> <dbl> <dbl> <dbl> <dbl> <dbl> <dbl> <dbl>
-    #>  1  87.4  87.2  105.  85.1  100.  86.3  99.1  99.9  102.  99.5  101.  102.
-    #>  2  87.4  85.6  105.  83.8  102.  83.8  97.2  99.9  103. 101.   102.  102.
-    #>  3  87.8  87.5  107.  85.4  101.  84.4  97.1  99.8  102. 101.   101.  102.
-    #>  4  89.7  88.4  111.  86.0  102.  86.2  99.9  99.9  103. 101.   102.  102.
-    #>  5  91.7  89.5  111.  86.9  101.  85.2  99.4  99.9  102. 100.   101.  102.
-    #>  6  95.0  92.9  115.  89.9  100.  89.3 102.   99.8  102.  99.7  101.  102.
-    #>  7  96.9  95.1  119.  92.9  102.  92.0 105.   99.7  104. 101.   103.  103.
-    #>  8  98.7  97.9  124.  96.1  102.  96.3 109.   99.7  103. 101.   102.  103.
-    #>  9  97.0  98.5  122.  96.9  103.  94.3 108.   99.7  105. 103.   104.  103.
-    #> 10 102.  101.   126.  99.0  103.  98.1 113.   99.7  105. 103.   103.  103.
-    #> # ... with 42 more rows, and 292 more variables: BWV <dbl>, CGW <dbl>,
-    #> #   CIU <dbl>, CSD <dbl>, CSJ <dbl>, CVY <dbl>, CWI <dbl>, CZA <dbl>,
-    #> #   DBA <dbl>, DBB <dbl>, DBC <dbl>, DBE <dbl>, DBO <dbl>, DBP <dbl>,
-    #> #   DBS <dbl>, DBV <dbl>, DDM <dbl>, DEF <dbl>, DEM <dbl>, DES <dbl>,
-    #> #   DEW <dbl>, DFE <dbl>, DFJ <dbl>, DGL <dbl>, DGT <dbl>, DHS <dbl>,
-    #> #   DIA <dbl>, DIG <dbl>, DIM <dbl>, DJP <dbl>, DLN <dbl>, DLS <dbl>,
-    #> #   DNL <dbl>, DOG <dbl>, DOL <dbl>, DON <dbl>, DOO <dbl>, DRW <dbl>,
-    #> #   DSI <dbl>, DTD <dbl>, DTH <dbl>, DTN <dbl>, EEB <dbl>, EEM <dbl>,
-    #> #   EES <dbl>, EFA <dbl>, EFG <dbl>, EFV <dbl>, ENY <dbl>, EPP <dbl>,
-    #> #   EPS <dbl>, ERO <dbl>, FAB <dbl>, FAD <dbl>, FBT <dbl>, FCG <dbl>,
-    #> #   FDL <dbl>, FDM <dbl>, FDN <dbl>, FEU <dbl>, FEX <dbl>, FEZ <dbl>,
-    #> #   FIW <dbl>, FNI <dbl>, FNX <dbl>, GBB <dbl>, GBF <dbl>, GDX <dbl>,
-    #> #   GEX <dbl>, GII <dbl>, GLD <dbl>, GMF <dbl>, GMM <dbl>, GSG <dbl>,
-    #> #   GSP <dbl>, GVI <dbl>, GWL <dbl>, GWX <dbl>, GXC <dbl>, HGI <dbl>,
-    #> #   HYG <dbl>, IAI <dbl>, IAK <dbl>, IAT <dbl>, IAU <dbl>, IBB <dbl>,
-    #> #   ICF <dbl>, IDHQ <dbl>, IDU <dbl>, IDV <dbl>, IEF <dbl>, IEI <dbl>,
-    #> #   IEO <dbl>, IEV <dbl>, IEZ <dbl>, IGE <dbl>, IGM <dbl>, IGN <dbl>,
-    #> #   IGV <dbl>, IHE <dbl>, ...
+    #> # A tibble: 41,112 x 102
+    #>        X V1       V2      V3     V4     V5      V6     V7     V8     V9
+    #>    <int> <fct> <int>   <dbl>  <dbl>  <dbl>   <dbl>  <dbl>  <dbl>  <dbl>
+    #>  1     1 ADRA      0 0.471   0.941  1.41   1.88    2.35   2.82   3.29  
+    #>  2     2 ADRD      0 0.478   0.567  0.0886 0       0.284  0.763  1.24  
+    #>  3     3 ADRE      0 0.732   1.46   2.20   2.93    3.66   3.68   2.94  
+    #>  4     4 ADRU      0 0.557   0.124  0      0       0.358  0.915  1.47  
+    #>  5     5 AGG       0 0.109   0.218  0.261  0.152   0.0428 0      0.0333
+    #>  6     6 AUSE      0 0.637   1.20   1.23   1.87    2.51   3.14   3.78  
+    #>  7     7 AXJL      0 0.707   1.41   2.12   2.83    3.53   4.24   3.76  
+    #>  8     8 BIL       0 0.00977 0.0195 0.0293 0.0391  0.0488 0.0586 0.0684
+    #>  9     9 BIV       0 0.150   0.300  0.154  0.00356 0      0      0     
+    #> 10    10 BLV       0 0.141   0.282  0.423  0.564   0.705  0.588  0.729 
+    #> # ... with 41,102 more rows, and 92 more variables: V10 <dbl>, V11 <dbl>,
+    #> #   V12 <dbl>, V13 <dbl>, V14 <dbl>, V15 <dbl>, V16 <dbl>, V17 <dbl>,
+    #> #   V18 <dbl>, V19 <dbl>, V20 <dbl>, V21 <dbl>, V22 <dbl>, V23 <dbl>,
+    #> #   V24 <dbl>, V25 <dbl>, V26 <dbl>, V27 <dbl>, V28 <dbl>, V29 <dbl>,
+    #> #   V30 <dbl>, V31 <dbl>, V32 <dbl>, V33 <dbl>, V34 <dbl>, V35 <dbl>,
+    #> #   V36 <dbl>, V37 <dbl>, V38 <dbl>, V39 <dbl>, V40 <dbl>, V41 <dbl>,
+    #> #   V42 <dbl>, V43 <dbl>, V44 <dbl>, V45 <dbl>, V46 <dbl>, V47 <dbl>,
+    #> #   V48 <dbl>, V49 <dbl>, V50 <dbl>, V51 <int>, V52 <int>, V53 <dbl>,
+    #> #   V54 <dbl>, V55 <dbl>, V56 <dbl>, V57 <dbl>, V58 <dbl>, V59 <dbl>,
+    #> #   V60 <dbl>, V61 <dbl>, V62 <dbl>, V63 <dbl>, V64 <dbl>, V65 <dbl>,
+    #> #   V66 <dbl>, V67 <dbl>, V68 <dbl>, V69 <dbl>, V70 <dbl>, V71 <dbl>,
+    #> #   V72 <dbl>, V73 <dbl>, V74 <dbl>, V75 <dbl>, V76 <dbl>, V77 <dbl>,
+    #> #   V78 <dbl>, V79 <dbl>, V80 <dbl>, V81 <dbl>, V82 <dbl>, V83 <dbl>,
+    #> #   V84 <dbl>, V85 <dbl>, V86 <dbl>, V87 <dbl>, V88 <dbl>, V89 <dbl>,
+    #> #   V90 <dbl>, V91 <dbl>, V92 <dbl>, V93 <dbl>, V94 <dbl>, V95 <dbl>,
+    #> #   V96 <dbl>, V97 <dbl>, V98 <dbl>, V99 <dbl>, V100 <dbl>, V101 <int>
 
 Are there 100 TDA features? If so, why is there only 1 set of value(s?),
 was expecting TDA values for each month.
