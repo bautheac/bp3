@@ -15,7 +15,9 @@ knitr::opts_chunk$set(echo = T, cache = T, comment = "#>")
 
 ## Load
 
+
 I load the data into two dataframes here; one for historical data ("data_price_etf.csv" in the original github repo) and one for qualitative data ("data_static_etf_com.csv" in the original github repo).
+
 ```{r load, message = F, warning = F}
 historic <- readr::read_csv(file = "../data/data_historic_etf.csv") %>%
   dplyr::mutate(Date = as.Date(Date)) %>% dplyr::arrange(Date) %>%
