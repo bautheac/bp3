@@ -153,7 +153,7 @@ TDA <- historic %>% multidplyr::partition(name, cluster = cluster) %>%
 data <- Reduce(function(x, y) merge(x, y, by = c("name", "date"), all = T),
                list(returns, HmL, volatility, TDA)) %>%
   dplyr::mutate(year = lubridate::year(date), month = lubridate::month(date)) %>%
-  dplyr::group_by(name, year, month) %>% dplyr::filter(dplyr::row_number() == n()) %>% 
+  dplyr::group_by(name, year, month) %>% dplyr::filter(dplyr::row_number() == n()) %>%
   dplyr::group_by(name) %>% dplyr::slice(12L:n()) %>% dplyr::ungroup() %>%
   dplyr::select(-c("year", "month"))
 ```
@@ -170,12 +170,21 @@ head(data)
     #> # A tibble: 6 x 135
     #>   name  date       return.1.week return.4.weeks return.8.weeks
     #>   <chr> <date>             <dbl>          <dbl>          <dbl>
+<<<<<<< HEAD
     #> 1 AAVX  2012-08-31       -0.0245          0.124          0.151
     #> 2 AAVX  2012-09-28        0               0.237          0.390
     #> 3 AAVX  2012-10-26        0               0              0.237
     #> 4 AAVX  2012-11-30        0               0              0    
     #> 5 AAVX  2012-12-28        0               0              0    
     #> 6 AAVX  2013-01-25        0               0              0    
+=======
+    #> 1 ADZ   2012-07-27       0.0885        -0.0923         -0.168 
+    #> 2 ADZ   2012-08-31      -0.0472        -0.00252        -0.0805
+    #> 3 ADZ   2012-09-28       0.0165         0.0577          0.0550
+    #> 4 ADZ   2012-10-26       0             -0.0306          0.0253
+    #> 5 ADZ   2012-11-30      -0.00525        0.0286         -0.0137
+    #> 6 ADZ   2012-12-28      -0.00987        0.0106          0.0395
+>>>>>>> a4c51ee3a0a28833f2707cecf97bc6621b18076d
     #> # ... with 130 more variables: return.13.weeks <dbl>,
     #> #   return.26.weeks <dbl>, return.52.weeks <dbl>, HmL.4.weeks <dbl>,
     #> #   HmL.8.weeks <dbl>, HmL.13.weeks <dbl>, HmL.26.weeks <dbl>,
