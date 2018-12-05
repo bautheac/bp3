@@ -53,9 +53,49 @@ TDA::landscape(diagram, dimension = 0L, KK = 2L, tseq = values)
 
 persistence <- lapply(2L:3L, function(x) TDA::landscape(diagram, dimension = 0L, KK = x, tseq = values)) %>%
   
-  
-  ```
+```
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+multi.sapply(cars, min, mean, max)
 
 
 

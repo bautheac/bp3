@@ -9,8 +9,9 @@
 <meta name="generator" content="pandoc" />
 
 
-<meta name="author" content="Olivier Bauthéac" />
+<meta name="author" content="Olivier" />
 
+<meta name="date" content="2018-12-05" />
 
 <title>backtest</title>
 
@@ -307,92 +308,166 @@ $(document).ready(function () {
 
 
 <h1 class="title toc-ignore">backtest</h1>
-<h4 class="author"><em>Olivier Bauthéac</em></h4>
-<h4 class="date"><em>24/11/2018</em></h4>
+<h4 class="author"><em>Olivier</em></h4>
+<h4 class="date"><em>2018-12-05</em></h4>
 
 </div>
 
 
+<pre class="r"><code>library(magrittr)
+
+knitr::opts_chunk$set(echo = T, cache = T, comment = &quot;#&gt;&quot;)
+
+cluster &lt;- multidplyr::create_cluster(parallel:::detectCores())</code></pre>
 <div id="load" class="section level2">
 <h2>Load</h2>
-<pre class="r"><code>historic &lt;- readr::read_csv(file = &quot;../data/data_historic_etf.csv&quot;) %&gt;%
-  dplyr::mutate(Date = as.Date(Date)) %&gt;% dplyr::arrange(Date) %&gt;%
-  tidyr::gather(`name`, price, -Date) %&gt;% dplyr::mutate(price = as.numeric(price)) %&gt;% 
-  dplyr::filter(complete.cases(.))
-static &lt;- readr::read_csv(file = &quot;../data/data_static_etf.csv&quot;)</code></pre>
+<p>I load the data into two dataframes here; one for historical data (“data_price_etf.csv” in the original github repo) and one for qualitative data (“data_static_etf_com.csv” in the original github repo).</p>
+<pre class="r"><code>random_names &lt;- c(&quot;BND&quot;, &quot;IWB&quot;, &quot;VBK&quot;, &quot;PPA&quot;, &quot;VYMI&quot;, &quot;GREK&quot;, &quot;VNM&quot;, &quot;DBEM&quot;,
+                  &quot;FTGC&quot;, &quot;BRZU&quot;, &quot;PTNQ&quot;, &quot;CWEB&quot;, &quot;DYLS&quot;, &quot;SLVO&quot;, &quot;GAMR&quot;, &quot;TFLO&quot;,
+                  &quot;HQBD&quot;, &quot;WBIR&quot;, &quot;ETHO&quot;, &quot;JHMS&quot;, &quot;TLDH&quot;, &quot;ASEA&quot;, &quot;GRNB&quot;, &quot;CANE&quot;,
+                  &quot;FTAG&quot;, &quot;COMB&quot;, &quot;MRGR&quot;, &quot;BFIT&quot;, &quot;LABS&quot;, &quot;CHEP&quot;, &quot;JJE&quot;, &quot;PRME&quot;)
+
+historic &lt;- readr::read_csv(file = &quot;../data/data_historic_etf.csv&quot;) %&gt;%
+  dplyr::mutate(date = as.Date(Date, origin = &quot;1970-01-01&quot;)) %&gt;% dplyr::arrange(date) %&gt;%
+  dplyr::select(-Date) %&gt;% tidyr::gather(`name`, price, -date) %&gt;% 
+  dplyr::mutate(price = as.numeric(price)) %&gt;% dplyr::filter(complete.cases(.)) %&gt;%
+  dplyr::filter(name %in% random_names)
+static &lt;- readr::read_csv(file = &quot;../data/data_static_etf.csv&quot;) %&gt;%
+  dplyr::rename(name = ticker) %&gt;% tidyr::gather(field, value, -name) %&gt;%
+  dplyr::mutate(field = forcats::as_factor(gsub(x = field, pattern = &quot;_&quot;, replacement = &quot;.&quot;))) %&gt;%
+  tidyr::spread(field, value) %&gt;%
+  dplyr::filter(name %in% random_names)</code></pre>
 </div>
 <div id="transform" class="section level2">
 <h2>Transform</h2>
+<p>To my understanding, feature engineering here involves calculating statistics as well as constructing TDA feature(s?) at regular interval (monthly) from the time series data at regular interval (monthly). The resulting dataframe would contain, for each month, one sample per name (ETF) where features include time series statistics, TDA value(s?) as well as qualitative information (static dataframe).</p>
 <div id="historic-features" class="section level3">
 <h3>Historic features</h3>
+<p>I understand that time series statistics include return, high minus low as well as volatility over various time horizons including past week, past 4 weeks, past 8 weeks, past 13 weeks, past 26 weeks, past 52 weeks.</p>
 <div id="returns" class="section level4">
 <h4>Returns</h4>
-<pre class="r"><code>sizes &lt;- dplyr::group_by(historic, `name`) %&gt;% dplyr::summarise(n = n())
-
-historic %&lt;&gt;% dplyr::group_by(`name`) %&gt;% dplyr::left_join(sizes, by = &quot;name&quot;) %&gt;%
-  dplyr::mutate(
-    `return - 1w` = price / dplyr::lag(price, n = 1L) - 1L,
-    `return - 4w` = price / dplyr::lag(price, n = 4L) - 1L,
-    `return - 8w` = price / dplyr::lag(price, n = 8L) - 1L,
-    `return - 13w` = price / dplyr::lag(price, n = 13L) - 1L,
-    `return - 26w` = price / dplyr::lag(price, n = 26L) - 1L,
-    `return - 52w` = price / dplyr::lag(price, n = 52L) - 1L
-    )
-
-remove(sizes)</code></pre>
+<p>I calculate returns as the relative change in price over the above-mentioned time horizons here.</p>
+<pre class="r"><code>returns &lt;- historic %&gt;% dplyr::group_by(`name`) %&gt;%
+  dplyr::do({data &lt;- .; data.table::rbindlist(
+    lapply(c(1L, 4L, 8L, 13L, 26L, 52L), function(x)
+      tibble::tibble(value = data$price / dplyr::lag(data$price, n = x) - 1L,
+                     date = data$date, 
+                     field = paste(&quot;return&quot;, x, ifelse(x &gt; 1L, &quot;weeks&quot;, &quot;week&quot;), sep = &quot;.&quot;))
+    ))}) %&gt;% dplyr::select(name, field, date, value) %&gt;% dplyr::filter(! is.na(value)) %&gt;% 
+  dplyr::mutate(field = forcats::as_factor(field)) %&gt;% tidyr::spread(field, value)</code></pre>
 </div>
 <div id="high---low" class="section level4">
 <h4>High - low</h4>
-<pre class="r"><code>`high - low` &lt;- function(x) max(x) - min(x)
+<p>I calculate high minus low by substracting the minimum observed value from the maximum observed value over the above-mentioned time horizons here.</p>
+<pre class="r"><code>sizes &lt;- dplyr::group_by(historic, `name`) %&gt;% dplyr::summarise(n = n())
 
-`high - low - 4w` &lt;- tibbletime::rollify(`high - low`, window = 4L)
-`high - low - 8w` &lt;- tibbletime::rollify(`high - low`, window = 8L)
-`high - low - 13w` &lt;- tibbletime::rollify(`high - low`, window = 13L)
-`high - low - 26w` &lt;- tibbletime::rollify(`high - low`, window = 26L)
-`high - low - 52w` &lt;- tibbletime::rollify(`high - low`, window = 52L)
+HmL &lt;- function(x) max(x) - min(x)
+multidplyr::cluster_assign_value(cluster, &quot;HmL&quot;, HmL)
 
-historic %&lt;&gt;% dplyr::mutate(
-  `high - low - 4w` = `high - low - 4w`(price),
-  `high - low - 8w` = `high - low - 8w`(price),
-  `high - low - 13w` = `high - low - 13w`(price),
-  `high - low - 26w` = ifelse(`n` &gt; 26L, `high - low - 26w`(price), NA),
-  `high - low - 52w` = ifelse(`n` &gt; 52L, `high - low - 52w`(price), NA)
-  )
-
-remove(`high - low`, `high - low - 4w`, `high - low - 8w`, 
-       `high - low - 13w`, `high - low - 26w`, `high - low - 52w`)</code></pre>
+HmL &lt;- historic %&gt;% dplyr::left_join(sizes, by = &quot;name&quot;) %&gt;% 
+  multidplyr::partition(name, cluster = cluster) %&gt;%
+  dplyr::do({data &lt;- .; data.table::rbindlist(
+    lapply(c(4L, 8L, 13L, 26L, 52L), function(x)
+      tibble::tibble(value = tryCatch(tibbletime::rollify(HmL, window = x)(data$price),
+                                      error = function(e) NA),
+                     date = data$date, 
+                     field = paste(&quot;HmL&quot;, x, &quot;weeks&quot;, sep = &quot;.&quot;))
+    ))}) %&gt;% dplyr::collect() %&gt;% dplyr::select(name, field, date, value) %&gt;%
+  dplyr::filter(! is.na(value)) %&gt;% dplyr::mutate(field = forcats::as_factor(field)) %&gt;%
+  tidyr::spread(field, value)</code></pre>
 </div>
 <div id="volatility" class="section level4">
 <h4>Volatility</h4>
-<pre class="r"><code>`volatility` &lt;- function(x) sd(x, na.rm = TRUE) * sqrt(52L)
+<p>I calculate volatility as the annualized standard deviation of 1-week returns over the above-mentioned time horizons here.</p>
+<pre class="r"><code>volatility &lt;- function(x) sd(x, na.rm = T) * sqrt(52L)
+multidplyr::cluster_assign_value(cluster, &quot;volatility&quot;, volatility)
 
-`volatility - 4w` &lt;- tibbletime::rollify(`volatility`, window = 4L)
-`volatility - 8w` &lt;- tibbletime::rollify(`volatility`, window = 8L)
-`volatility - 13w` &lt;- tibbletime::rollify(`volatility`, window = 13L)
-`volatility - 26w` &lt;- tibbletime::rollify(`volatility`, window = 26L)
-`volatility - 52w` &lt;- tibbletime::rollify(`volatility`, window = 52L)
-
-historic %&lt;&gt;% dplyr::mutate(
-  `volatility - 4w` = `volatility - 4w`(`return - 1w`),
-  `volatility - 8w` = `volatility - 8w`(`return - 1w`),
-  `volatility - 13w` = `volatility - 13w`(`return - 1w`),
-  `volatility - 26w` = ifelse(`n` &gt; 26L, `volatility - 26w`(`return - 1w`), NA),
-  `volatility - 52w` = ifelse(`n` &gt; 52L, `volatility - 52w`(`return - 1w`), NA)
-  )
-
-remove(`volatility`, `volatility - 4w`, `volatility - 8w`, 
-       `volatility - 13w`, `volatility - 26w`, `volatility - 52w`)</code></pre>
+volatility &lt;- dplyr::select(returns, name, date, return = return.1.week) %&gt;%
+  dplyr::left_join(sizes, by = &quot;name&quot;) %&gt;% multidplyr::partition(name, cluster = cluster) %&gt;%
+  dplyr::do({data &lt;- .; data.table::rbindlist(
+    lapply(c(4L, 8L, 13L, 26L, 52L), function(x)
+      tibble::tibble(value = tryCatch(tibbletime::rollify(volatility, window = x)(data$return),
+                                      error = function(e) NA),
+                     date = data$date, 
+                     field = paste(&quot;volatility&quot;, x, &quot;weeks&quot;, sep = &quot;.&quot;))
+    ))}) %&gt;% dplyr::collect() %&gt;% dplyr::select(name, field, date, value) %&gt;%
+  dplyr::filter(! is.na(value)) %&gt;% dplyr::mutate(field = forcats::as_factor(field)) %&gt;% 
+  tidyr::spread(field, value)</code></pre>
 </div>
 <div id="tda" class="section level4">
 <h4>TDA</h4>
-<p>????</p>
+<p>I get stuck here. To my undertanding there should be TDA feature(s?) for every month and name with the feature(s?) generated by feeding the previous 52-week price history to TDA functions. The output dataset in the original github repo shows 100 values (columns) for each name (row):</p>
+<pre class="r"><code>TDA &lt;- function(x) {
+  diag &lt;- TDA::gridDiag(FUNvalues = x ,sublevel = F, printProgress = F)$diagram
+  values &lt;- seq(min(diag[, c(&quot;Death&quot;, &quot;Birth&quot;)]), max(diag[, c(&quot;Death&quot;, &quot;Birth&quot;)]), 
+                length = 50L)
+  out &lt;- c(TDA::landscape(diag, dimension = 0L, KK = 2L, tseq = values)[, 1L],
+           TDA::landscape(diag, dimension = 0L, KK = 3L, tseq = values)[, 1L])
+  
+  magrittr::set_names(as.list(out), paste(&quot;TDA&quot;, 1L:100L))
+}
+multidplyr::cluster_assign_value(cluster, &quot;TDA&quot;, TDA)
+
+TDA &lt;- historic %&gt;% multidplyr::partition(name, cluster = cluster) %&gt;%
+  dplyr::do({ data &lt;- .; 
+  tryCatch(
+    data.table::rbindlist(
+      lapply(52L:nrow(data), function(x)
+        cbind(date = dplyr::filter(data, dplyr::row_number() == x)$date,
+              data.frame(TDA(dplyr::slice(data, (x - 51L):x)$price))))
+    ),
+    error = function(e) 
+      data.frame(magrittr::set_names(as.list(rep(NA, 101L)), c(&quot;date&quot;, paste(&quot;TDA&quot;, 1L:100L))))
+    )
+  }) %&gt;% dplyr::collect()</code></pre>
+<p>Are there 100 TDA features? If so, why is there only 1 set of value(s?), was expecting TDA values for each month.</p>
 </div>
 <div id="wrap-up" class="section level4">
 <h4>Wrap up</h4>
-<pre class="r"><code>historic %&lt;&gt;% dplyr::mutate(year = lubridate::year(Date), month = lubridate::month(Date), date = Date) %&gt;%
+<pre class="r"><code>data &lt;- Reduce(function(x, y) merge(x, y, by = c(&quot;name&quot;, &quot;date&quot;), all = T),
+               list(returns, HmL, volatility, TDA)) %&gt;%
+  dplyr::mutate(year = lubridate::year(date), month = lubridate::month(date)) %&gt;%
   dplyr::group_by(name, year, month) %&gt;% dplyr::filter(dplyr::row_number() == n()) %&gt;% 
-  dplyr::ungroup() %&gt;% dplyr::select(-c(&quot;Date&quot;, &quot;n&quot;, &quot;year&quot;, &quot;month&quot;)) %&gt;% 
-  tidyr::gather(feature, value, -c(&quot;date&quot;, &quot;name&quot;))</code></pre>
+  dplyr::group_by(name) %&gt;% dplyr::slice(52L:n()) %&gt;% dplyr::ungroup() %&gt;%
+  dplyr::select(-c(&quot;year&quot;, &quot;month&quot;)) %&gt;% dplyr::left_join(static, by = &quot;name&quot;)
+data</code></pre>
+<pre><code>#&gt; # A tibble: 454 x 135
+#&gt;    name  date       return.1.week return.4.weeks return.8.weeks
+#&gt;    &lt;chr&gt; &lt;date&gt;             &lt;dbl&gt;          &lt;dbl&gt;          &lt;dbl&gt;
+#&gt;  1 ASEA  2015-05-29     -0.0372         -0.0464        -0.0422 
+#&gt;  2 ASEA  2015-06-26     -0.00830        -0.0160        -0.0617 
+#&gt;  3 ASEA  2015-07-31      0.00188        -0.0293        -0.0203 
+#&gt;  4 ASEA  2015-08-28      0.0288         -0.122         -0.148  
+#&gt;  5 ASEA  2015-09-25     -0.0497         -0.0630        -0.177  
+#&gt;  6 ASEA  2015-10-30     -0.0477          0.0719         0.0521 
+#&gt;  7 ASEA  2015-11-27     -0.0177         -0.0177         0.0529 
+#&gt;  8 ASEA  2015-12-25      0.0213         -0.00232       -0.0200 
+#&gt;  9 ASEA  2016-01-29      0.0444         -0.0108        -0.0741 
+#&gt; 10 ASEA  2016-02-26     -0.000658        0.0126         0.00164
+#&gt; # ... with 444 more rows, and 130 more variables: return.13.weeks &lt;dbl&gt;,
+#&gt; #   return.26.weeks &lt;dbl&gt;, return.52.weeks &lt;dbl&gt;, HmL.4.weeks &lt;dbl&gt;,
+#&gt; #   HmL.8.weeks &lt;dbl&gt;, HmL.13.weeks &lt;dbl&gt;, HmL.26.weeks &lt;dbl&gt;,
+#&gt; #   HmL.52.weeks &lt;dbl&gt;, volatility.4.weeks &lt;dbl&gt;,
+#&gt; #   volatility.8.weeks &lt;dbl&gt;, volatility.13.weeks &lt;dbl&gt;,
+#&gt; #   volatility.26.weeks &lt;dbl&gt;, volatility.52.weeks &lt;dbl&gt;, TDA.1 &lt;dbl&gt;,
+#&gt; #   TDA.2 &lt;dbl&gt;, TDA.3 &lt;dbl&gt;, TDA.4 &lt;dbl&gt;, TDA.5 &lt;dbl&gt;, TDA.6 &lt;dbl&gt;,
+#&gt; #   TDA.7 &lt;dbl&gt;, TDA.8 &lt;dbl&gt;, TDA.9 &lt;dbl&gt;, TDA.10 &lt;dbl&gt;, TDA.11 &lt;dbl&gt;,
+#&gt; #   TDA.12 &lt;dbl&gt;, TDA.13 &lt;dbl&gt;, TDA.14 &lt;dbl&gt;, TDA.15 &lt;dbl&gt;, TDA.16 &lt;dbl&gt;,
+#&gt; #   TDA.17 &lt;dbl&gt;, TDA.18 &lt;dbl&gt;, TDA.19 &lt;dbl&gt;, TDA.20 &lt;dbl&gt;, TDA.21 &lt;dbl&gt;,
+#&gt; #   TDA.22 &lt;dbl&gt;, TDA.23 &lt;dbl&gt;, TDA.24 &lt;dbl&gt;, TDA.25 &lt;dbl&gt;, TDA.26 &lt;dbl&gt;,
+#&gt; #   TDA.27 &lt;dbl&gt;, TDA.28 &lt;dbl&gt;, TDA.29 &lt;dbl&gt;, TDA.30 &lt;dbl&gt;, TDA.31 &lt;dbl&gt;,
+#&gt; #   TDA.32 &lt;dbl&gt;, TDA.33 &lt;dbl&gt;, TDA.34 &lt;dbl&gt;, TDA.35 &lt;dbl&gt;, TDA.36 &lt;dbl&gt;,
+#&gt; #   TDA.37 &lt;dbl&gt;, TDA.38 &lt;dbl&gt;, TDA.39 &lt;dbl&gt;, TDA.40 &lt;dbl&gt;, TDA.41 &lt;dbl&gt;,
+#&gt; #   TDA.42 &lt;dbl&gt;, TDA.43 &lt;dbl&gt;, TDA.44 &lt;dbl&gt;, TDA.45 &lt;dbl&gt;, TDA.46 &lt;dbl&gt;,
+#&gt; #   TDA.47 &lt;dbl&gt;, TDA.48 &lt;dbl&gt;, TDA.49 &lt;dbl&gt;, TDA.50 &lt;dbl&gt;, TDA.51 &lt;dbl&gt;,
+#&gt; #   TDA.52 &lt;dbl&gt;, TDA.53 &lt;dbl&gt;, TDA.54 &lt;dbl&gt;, TDA.55 &lt;dbl&gt;, TDA.56 &lt;dbl&gt;,
+#&gt; #   TDA.57 &lt;dbl&gt;, TDA.58 &lt;dbl&gt;, TDA.59 &lt;dbl&gt;, TDA.60 &lt;dbl&gt;, TDA.61 &lt;dbl&gt;,
+#&gt; #   TDA.62 &lt;dbl&gt;, TDA.63 &lt;dbl&gt;, TDA.64 &lt;dbl&gt;, TDA.65 &lt;dbl&gt;, TDA.66 &lt;dbl&gt;,
+#&gt; #   TDA.67 &lt;dbl&gt;, TDA.68 &lt;dbl&gt;, TDA.69 &lt;dbl&gt;, TDA.70 &lt;dbl&gt;, TDA.71 &lt;dbl&gt;,
+#&gt; #   TDA.72 &lt;dbl&gt;, TDA.73 &lt;dbl&gt;, TDA.74 &lt;dbl&gt;, TDA.75 &lt;dbl&gt;, TDA.76 &lt;dbl&gt;,
+#&gt; #   TDA.77 &lt;dbl&gt;, TDA.78 &lt;dbl&gt;, TDA.79 &lt;dbl&gt;, TDA.80 &lt;dbl&gt;, TDA.81 &lt;dbl&gt;,
+#&gt; #   TDA.82 &lt;dbl&gt;, TDA.83 &lt;dbl&gt;, TDA.84 &lt;dbl&gt;, TDA.85 &lt;dbl&gt;, TDA.86 &lt;dbl&gt;,
+#&gt; #   TDA.87 &lt;dbl&gt;, ...</code></pre>
 </div>
 </div>
 </div>
