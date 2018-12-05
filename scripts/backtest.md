@@ -154,48 +154,9 @@ data <- Reduce(function(x, y) merge(x, y, by = c("name", "date"), all = T),
                list(returns, HmL, volatility, TDA)) %>%
   dplyr::mutate(year = lubridate::year(date), month = lubridate::month(date)) %>%
   dplyr::group_by(name, year, month) %>% dplyr::filter(dplyr::row_number() == n()) %>% 
-  dplyr::group_by(name) %>% dplyr::slice(52L:n()) %>% dplyr::ungroup() %>%
-  dplyr::select(-c("year", "month")) %>% dplyr::left_join(static, by = "name")
-data
+  dplyr::group_by(name) %>% dplyr::slice(12L:n()) %>% dplyr::ungroup() %>%
+  dplyr::select(-c("year", "month"))
 ```
-
-    #> # A tibble: 4,090 x 135
-    #>    name  date       return.1.week return.4.weeks return.8.weeks
-    #>    <chr> <date>             <dbl>          <dbl>          <dbl>
-    #>  1 ADRU  2011-08-26       0.0250        -0.127        -0.164   
-    #>  2 ADRU  2011-09-30       0.0296        -0.0738       -0.103   
-    #>  3 ADRU  2011-10-28       0.0576         0.166         0.0801  
-    #>  4 ADRU  2011-11-25      -0.0612        -0.145        -0.00345 
-    #>  5 ADRU  2011-12-30       0.00492       -0.0106       -0.0362  
-    #>  6 ADRU  2012-01-27       0.00937        0.0403        0.0292  
-    #>  7 ADRU  2012-02-24       0.0196         0.0454        0.0875  
-    #>  8 ADRU  2012-03-30      -0.0154        -0.0179       -0.000909
-    #>  9 ADRU  2012-04-27       0.0115        -0.00859      -0.0263  
-    #> 10 ADRU  2012-05-25       0.00187       -0.0952       -0.103   
-    #> # ... with 4,080 more rows, and 130 more variables: return.13.weeks <dbl>,
-    #> #   return.26.weeks <dbl>, return.52.weeks <dbl>, HmL.4.weeks <dbl>,
-    #> #   HmL.8.weeks <dbl>, HmL.13.weeks <dbl>, HmL.26.weeks <dbl>,
-    #> #   HmL.52.weeks <dbl>, volatility.4.weeks <dbl>,
-    #> #   volatility.8.weeks <dbl>, volatility.13.weeks <dbl>,
-    #> #   volatility.26.weeks <dbl>, volatility.52.weeks <dbl>, TDA.1 <dbl>,
-    #> #   TDA.2 <dbl>, TDA.3 <dbl>, TDA.4 <dbl>, TDA.5 <dbl>, TDA.6 <dbl>,
-    #> #   TDA.7 <dbl>, TDA.8 <dbl>, TDA.9 <dbl>, TDA.10 <dbl>, TDA.11 <dbl>,
-    #> #   TDA.12 <dbl>, TDA.13 <dbl>, TDA.14 <dbl>, TDA.15 <dbl>, TDA.16 <dbl>,
-    #> #   TDA.17 <dbl>, TDA.18 <dbl>, TDA.19 <dbl>, TDA.20 <dbl>, TDA.21 <dbl>,
-    #> #   TDA.22 <dbl>, TDA.23 <dbl>, TDA.24 <dbl>, TDA.25 <dbl>, TDA.26 <dbl>,
-    #> #   TDA.27 <dbl>, TDA.28 <dbl>, TDA.29 <dbl>, TDA.30 <dbl>, TDA.31 <dbl>,
-    #> #   TDA.32 <dbl>, TDA.33 <dbl>, TDA.34 <dbl>, TDA.35 <dbl>, TDA.36 <dbl>,
-    #> #   TDA.37 <dbl>, TDA.38 <dbl>, TDA.39 <dbl>, TDA.40 <dbl>, TDA.41 <dbl>,
-    #> #   TDA.42 <dbl>, TDA.43 <dbl>, TDA.44 <dbl>, TDA.45 <dbl>, TDA.46 <dbl>,
-    #> #   TDA.47 <dbl>, TDA.48 <dbl>, TDA.49 <dbl>, TDA.50 <dbl>, TDA.51 <dbl>,
-    #> #   TDA.52 <dbl>, TDA.53 <dbl>, TDA.54 <dbl>, TDA.55 <dbl>, TDA.56 <dbl>,
-    #> #   TDA.57 <dbl>, TDA.58 <dbl>, TDA.59 <dbl>, TDA.60 <dbl>, TDA.61 <dbl>,
-    #> #   TDA.62 <dbl>, TDA.63 <dbl>, TDA.64 <dbl>, TDA.65 <dbl>, TDA.66 <dbl>,
-    #> #   TDA.67 <dbl>, TDA.68 <dbl>, TDA.69 <dbl>, TDA.70 <dbl>, TDA.71 <dbl>,
-    #> #   TDA.72 <dbl>, TDA.73 <dbl>, TDA.74 <dbl>, TDA.75 <dbl>, TDA.76 <dbl>,
-    #> #   TDA.77 <dbl>, TDA.78 <dbl>, TDA.79 <dbl>, TDA.80 <dbl>, TDA.81 <dbl>,
-    #> #   TDA.82 <dbl>, TDA.83 <dbl>, TDA.84 <dbl>, TDA.85 <dbl>, TDA.86 <dbl>,
-    #> #   TDA.87 <dbl>, ...
 
 ### Merge with qualitative features dataset
 
@@ -203,23 +164,19 @@ And there is the features dataset; does everything looks alright to you?
 
 ``` r
 data %<>% dplyr::left_join(static, by = "name")
-data
+head(data)
 ```
 
-    #> # A tibble: 4,090 x 152
-    #>    name  date       return.1.week return.4.weeks return.8.weeks
-    #>    <chr> <date>             <dbl>          <dbl>          <dbl>
-    #>  1 ADRU  2011-08-26       0.0250        -0.127        -0.164   
-    #>  2 ADRU  2011-09-30       0.0296        -0.0738       -0.103   
-    #>  3 ADRU  2011-10-28       0.0576         0.166         0.0801  
-    #>  4 ADRU  2011-11-25      -0.0612        -0.145        -0.00345 
-    #>  5 ADRU  2011-12-30       0.00492       -0.0106       -0.0362  
-    #>  6 ADRU  2012-01-27       0.00937        0.0403        0.0292  
-    #>  7 ADRU  2012-02-24       0.0196         0.0454        0.0875  
-    #>  8 ADRU  2012-03-30      -0.0154        -0.0179       -0.000909
-    #>  9 ADRU  2012-04-27       0.0115        -0.00859      -0.0263  
-    #> 10 ADRU  2012-05-25       0.00187       -0.0952       -0.103   
-    #> # ... with 4,080 more rows, and 147 more variables: return.13.weeks <dbl>,
+    #> # A tibble: 6 x 135
+    #>   name  date       return.1.week return.4.weeks return.8.weeks
+    #>   <chr> <date>             <dbl>          <dbl>          <dbl>
+    #> 1 AAVX  2012-08-31       -0.0245          0.124          0.151
+    #> 2 AAVX  2012-09-28        0               0.237          0.390
+    #> 3 AAVX  2012-10-26        0               0              0.237
+    #> 4 AAVX  2012-11-30        0               0              0    
+    #> 5 AAVX  2012-12-28        0               0              0    
+    #> 6 AAVX  2013-01-25        0               0              0    
+    #> # ... with 130 more variables: return.13.weeks <dbl>,
     #> #   return.26.weeks <dbl>, return.52.weeks <dbl>, HmL.4.weeks <dbl>,
     #> #   HmL.8.weeks <dbl>, HmL.13.weeks <dbl>, HmL.26.weeks <dbl>,
     #> #   HmL.52.weeks <dbl>, volatility.4.weeks <dbl>,
@@ -243,5 +200,55 @@ data
     #> #   TDA.77 <dbl>, TDA.78 <dbl>, TDA.79 <dbl>, TDA.80 <dbl>, TDA.81 <dbl>,
     #> #   TDA.82 <dbl>, TDA.83 <dbl>, TDA.84 <dbl>, TDA.85 <dbl>, TDA.86 <dbl>,
     #> #   TDA.87 <dbl>, ...
+
+``` r
+names(data)
+```
+
+    #>   [1] "name"                "date"                "return.1.week"      
+    #>   [4] "return.4.weeks"      "return.8.weeks"      "return.13.weeks"    
+    #>   [7] "return.26.weeks"     "return.52.weeks"     "HmL.4.weeks"        
+    #>  [10] "HmL.8.weeks"         "HmL.13.weeks"        "HmL.26.weeks"       
+    #>  [13] "HmL.52.weeks"        "volatility.4.weeks"  "volatility.8.weeks" 
+    #>  [16] "volatility.13.weeks" "volatility.26.weeks" "volatility.52.weeks"
+    #>  [19] "TDA.1"               "TDA.2"               "TDA.3"              
+    #>  [22] "TDA.4"               "TDA.5"               "TDA.6"              
+    #>  [25] "TDA.7"               "TDA.8"               "TDA.9"              
+    #>  [28] "TDA.10"              "TDA.11"              "TDA.12"             
+    #>  [31] "TDA.13"              "TDA.14"              "TDA.15"             
+    #>  [34] "TDA.16"              "TDA.17"              "TDA.18"             
+    #>  [37] "TDA.19"              "TDA.20"              "TDA.21"             
+    #>  [40] "TDA.22"              "TDA.23"              "TDA.24"             
+    #>  [43] "TDA.25"              "TDA.26"              "TDA.27"             
+    #>  [46] "TDA.28"              "TDA.29"              "TDA.30"             
+    #>  [49] "TDA.31"              "TDA.32"              "TDA.33"             
+    #>  [52] "TDA.34"              "TDA.35"              "TDA.36"             
+    #>  [55] "TDA.37"              "TDA.38"              "TDA.39"             
+    #>  [58] "TDA.40"              "TDA.41"              "TDA.42"             
+    #>  [61] "TDA.43"              "TDA.44"              "TDA.45"             
+    #>  [64] "TDA.46"              "TDA.47"              "TDA.48"             
+    #>  [67] "TDA.49"              "TDA.50"              "TDA.51"             
+    #>  [70] "TDA.52"              "TDA.53"              "TDA.54"             
+    #>  [73] "TDA.55"              "TDA.56"              "TDA.57"             
+    #>  [76] "TDA.58"              "TDA.59"              "TDA.60"             
+    #>  [79] "TDA.61"              "TDA.62"              "TDA.63"             
+    #>  [82] "TDA.64"              "TDA.65"              "TDA.66"             
+    #>  [85] "TDA.67"              "TDA.68"              "TDA.69"             
+    #>  [88] "TDA.70"              "TDA.71"              "TDA.72"             
+    #>  [91] "TDA.73"              "TDA.74"              "TDA.75"             
+    #>  [94] "TDA.76"              "TDA.77"              "TDA.78"             
+    #>  [97] "TDA.79"              "TDA.80"              "TDA.81"             
+    #> [100] "TDA.82"              "TDA.83"              "TDA.84"             
+    #> [103] "TDA.85"              "TDA.86"              "TDA.87"             
+    #> [106] "TDA.88"              "TDA.89"              "TDA.90"             
+    #> [109] "TDA.91"              "TDA.92"              "TDA.93"             
+    #> [112] "TDA.94"              "TDA.95"              "TDA.96"             
+    #> [115] "TDA.97"              "TDA.98"              "TDA.99"             
+    #> [118] "TDA.100"             "issuer"              "expense.ratio"      
+    #> [121] "aum"                 "spread"              "asset.class"        
+    #> [124] "strategy"            "region"              "category"           
+    #> [127] "focus"               "niche"               "inverse"            
+    #> [130] "leveraged"           "etn"                 "index.prov"         
+    #> [133] "selection"           "weight.schm"         "act.p.sec"
 
 Moving on to working on modeling part.
