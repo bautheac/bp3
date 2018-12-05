@@ -153,7 +153,7 @@ TDA <- historic %>% multidplyr::partition(name, cluster = cluster) %>%
 data <- Reduce(function(x, y) merge(x, y, by = c("name", "date"), all = T),
                list(returns, HmL, volatility, TDA)) %>%
   dplyr::mutate(year = lubridate::year(date), month = lubridate::month(date)) %>%
-  dplyr::group_by(name, year, month) %>% dplyr::filter(dplyr::row_number() == n()) %>% 
+  dplyr::group_by(name, year, month) %>% dplyr::filter(dplyr::row_number() == n()) %>%
   dplyr::group_by(name) %>% dplyr::slice(12L:n()) %>% dplyr::ungroup() %>%
   dplyr::select(-c("year", "month"))
 ```
