@@ -170,12 +170,12 @@ head(data)
     #> # A tibble: 6 x 135
     #>   name  date       return.1.week return.4.weeks return.8.weeks
     #>   <chr> <date>             <dbl>          <dbl>          <dbl>
-    #> 1 AAVX  2012-08-31       -0.0245          0.124          0.151
-    #> 2 AAVX  2012-09-28        0               0.237          0.390
-    #> 3 AAVX  2012-10-26        0               0              0.237
-    #> 4 AAVX  2012-11-30        0               0              0    
-    #> 5 AAVX  2012-12-28        0               0              0    
-    #> 6 AAVX  2013-01-25        0               0              0    
+    #> 1 AAIT  2013-01-25     -0.0293          0.00146       -0.0256 
+    #> 2 AAIT  2013-02-22      0.0126          0.0230         0.0245 
+    #> 3 AAIT  2013-03-29      0.0273          0.00712        0.0180 
+    #> 4 AAIT  2013-04-26     -0.000709       -0.00424        0.00285
+    #> 5 AAIT  2013-05-31     -0.00791        -0.00586        0.0540 
+    #> 6 AAIT  2013-06-28      0.0233         -0.0579        -0.0634 
     #> # ... with 130 more variables: return.13.weeks <dbl>,
     #> #   return.26.weeks <dbl>, return.52.weeks <dbl>, HmL.4.weeks <dbl>,
     #> #   HmL.8.weeks <dbl>, HmL.13.weeks <dbl>, HmL.26.weeks <dbl>,
