@@ -7,26 +7,24 @@ output:
     variant: markdown_github
 # output: html_document
 ---
-## Setup
-
+## Session setup
 R is single-threated by default so I'm setting up a working cluster here to access computational power of all available cores on computer.
-```{r setup, message = F, warning = F, include = T}
-library(magrittr)
+```{r `session setup`, message = F, warning = F, include = T}
+library(magrittr); source("functions.r")
 
-knitr::opts_chunk$set(echo = T, cache = T, comment = "#>")
+knitr::opts_chunk$set(echo = T, eval = F, cache = F, comment = "#>")
 
 cluster <- multidplyr::create_cluster(parallel:::detectCores())
 ```
 
 
 ## Load
-
 I load the data into two dataframes here; one for historical data ("data_price_etf.csv" in the original github repo) and one for qualitative data ("data_static_etf_com.csv" in the original github repo).  
-I limit the analysis to 100 randomly picked names here to keep things light as long as developping the code. Will run on the whole dataset when everything is fully developped and works well.
+I limit the analysis to 500 randomly picked names here to keep things light as long as developping the code. Will run on the whole dataset when everything is fully developped and works well.
 
 ```{r load, message = F, warning = F}
 random_names <- names(readr::read_csv(file = "../data/data_historic_etf.csv", n_max = 1L))[-1L]
-random_names <- random_names[sample.int(NROW(random_names), 100L)]
+set.seed(0607L); random_names <- random_names[sample.int(NROW(random_names), 500L)]
 
 historic <- readr::read_csv(file = "../data/data_historic_etf.csv") %>%
   dplyr::mutate(date = as.Date(Date, origin = "1970-01-01")) %>% dplyr::arrange(date) %>%
@@ -44,35 +42,29 @@ multidplyr::cluster_assign_value(cluster, "horizons", horizons)
 
 
 ## Transform
-
 To my understanding, feature engineering here involves calculating statistics as well as constructing TDA features at regular interval (monthly) from the time series data at regular interval (monthly). The resulting dataframe would contain, for each month, one sample per name (ETF) where features include time series statistics, TDA values as well as qualitative information (static dataframe).
 
 ### Historic features
-
 I understand that time series statistics include return, high minus low as well as volatility over various time horizons including past week, past 4 weeks, past 8 weeks, past 13 weeks, past 26 weeks, past 52 weeks.
 
 #### Returns
-
 I calculate returns as the relative change in price over the above-mentioned time horizons here.
 ```{r returns, message = F, warning = F}
-returns <- historic %>% dplyr::group_by(`name`) %>%
+returns <- dplyr::group_by(historic, `name`) %>%
   dplyr::do({data <- .; data.table::rbindlist(
     lapply(c(1L, horizons), function(x)
-      tibble::tibble(value = data$price / dplyr::lag(data$price, n = x) - 1L,
-                     date = data$date, 
+      tibble::tibble(value = data$price / dplyr::lag(data$price, n = x) - 1L, date = data$date, 
                      field = paste("return", x, ifelse(x > 1L, "weeks", "week"), sep = "."))
     ))}) %>% dplyr::select(name, field, date, value) %>% dplyr::filter(! is.na(value)) %>% 
   dplyr::mutate(field = forcats::as_factor(field)) %>% tidyr::spread(field, value)
 ```
 
 #### High - low
-
 I calculate high minus low by substracting the minimum observed value from the maximum observed value over the above-mentioned time horizons here.
 ```{r `high - low`, message = F, warning = F}
-HmL <- function(x) max(x) - min(x)
 multidplyr::cluster_assign_value(cluster, "HmL", HmL)
 
-HmL <- historic %>% multidplyr::partition(name, cluster = cluster) %>%
+HmL <- multidplyr::partition(historic, name, cluster = cluster) %>%
   dplyr::do({data <- .; data.table::rbindlist(
     lapply(horizons, function(x)
       tibble::tibble(value = tryCatch(tibbletime::rollify(HmL, window = x)(data$price),
@@ -85,10 +77,8 @@ HmL <- historic %>% multidplyr::partition(name, cluster = cluster) %>%
 ```
 
 #### Volatility
-
 I calculate volatility as the annualized standard deviation of 1-week returns over the above-mentioned time horizons here.
 ```{r volatility, message = F, warning = F}
-volatility <- function(x) sd(x, na.rm = T) * sqrt(52L)
 multidplyr::cluster_assign_value(cluster, "volatility", volatility)
 
 volatility <- dplyr::select(returns, name, date, return = return.1.week) %>%
@@ -107,34 +97,28 @@ volatility <- dplyr::select(returns, name, date, return = return.1.week) %>%
 #### TDA
 Ok, got it, see bellow if things look alright to you.
 ```{r TDA, message = F, warning = F}
-TDA <- function(x) {
-  diag <- TDA::gridDiag(FUNvalues = x ,sublevel = F, printProgress = F)$diagram
-  values <- seq(min(diag[, c("Death", "Birth")]), max(diag[, c("Death", "Birth")]), 
-                length = 50L)
-  out <- c(TDA::landscape(diag, dimension = 0L, KK = 2L, tseq = values)[, 1L],
-           TDA::landscape(diag, dimension = 0L, KK = 3L, tseq = values)[, 1L])
-  
-  magrittr::set_names(as.list(out), paste("TDA", 1L:100L))
-}
 multidplyr::cluster_assign_value(cluster, "TDA", TDA)
 
-TDA <- historic %>% multidplyr::partition(name, cluster = cluster) %>%
-  dplyr::do({ data <- .; 
-  tryCatch(
-    data.table::rbindlist(
-      lapply(52L:nrow(data), function(x)
-        cbind(date = dplyr::filter(data, dplyr::row_number() == x)$date,
-              data.frame(TDA(dplyr::slice(data, (x - 51L):x)$price))))
-    ),
-    error = function(e) 
-      data.frame(magrittr::set_names(as.list(rep(NA, 101L)), c("date", paste("TDA", 1L:100L))))
+TDA <- multidplyr::partition(historic, name, cluster = cluster) %>%
+  dplyr::do({ 
+    data <- .
+    tryCatch(
+      data.table::rbindlist(
+        lapply(52L:nrow(data), function(x)
+          cbind(date = dplyr::filter(data, dplyr::row_number() == x)$date,
+                data.frame(TDA(dplyr::slice(data, (x - 51L):x)$price))))
+      ),
+      error = function(e) 
+        data.frame(magrittr::set_names(as.list(rep(NA, 101L)), c("date", paste("TDA", 1L:100L))))
     )
   }) %>% dplyr::collect()
 ```
 
 #### Wrap up
 ```{r `historic final`, message = F, warning = F}
-data <- Reduce(function(x, y) merge(x, y, by = c("name", "date"), all = T),
+parallel::stopCluster(cluster); gc()
+
+features <- Reduce(function(x, y) merge(x, y, by = c("name", "date"), all = T),
                list(returns, HmL, volatility, TDA)) %>%
   dplyr::mutate(year = lubridate::year(date), month = lubridate::month(date)) %>%
   dplyr::group_by(name, year, month) %>% dplyr::filter(dplyr::row_number() == n()) %>%
@@ -143,15 +127,95 @@ data <- Reduce(function(x, y) merge(x, y, by = c("name", "date"), all = T),
 ```
 
 ### Merge with qualitative features dataset
-
 And there is the features dataset; does everything looks alright to you?
 ```{r `merge static`, message = F, warning = F}
-data %<>% dplyr::left_join(static, by = "name")
-head(data)
-```
-```{r}
-names(data)
+features %<>% dplyr::left_join(static, by = "name")
+saveRDS(historic, file = "../data/historic.rds"); saveRDS(features, file = "../data/features.rds")
+head(features)
 ```
 
 
-Moving on to working on modeling part.
+## Model
+
+### classes
+```{r labels, message = F, warning = F}
+historic <- readRDS(file = "../data/historic.rds"); features <- readRDS(file = "../data/features.rds")
+
+threshold <- 0.1
+
+performance <- dplyr::mutate(historic, month = paste(lubridate::year(date), 
+                                                     ifelse(lubridate::month(date) < 10L,
+                                                            paste0(0L, lubridate::month(date)), lubridate::month(date)),
+                                                     sep = ".") %>% forcats::as_factor()) %>% 
+  dplyr::group_by(name, month) %>% dplyr::filter(dplyr::row_number() == n()) %>% dplyr::group_by(name) %>%
+  dplyr::mutate(performance = price / dplyr::lag(price, n = 1L) - 1L) %>% dplyr::select(date, name, performance) %>%
+  dplyr::ungroup() %>% dplyr::filter(! is.na(performance))
+
+classes <- dplyr::group_by(performance, date) %>% 
+  dplyr::do(data.frame(with(data = ., .[order(performance), ])) %>%
+              dplyr::mutate(class = dplyr::case_when(.$performance > quantile(.$performance, probs = (1L - threshold)) ~ "long",
+                                                     .$performance < quantile(.$performance, probs = threshold) ~ "short",
+                                                     T ~ "hold")
+              )
+  ) %>% dplyr::ungroup() %>% dplyr::group_by(name) %>% dplyr::mutate(date = dplyr::lag(date, n = 1L)) %>%
+  dplyr::ungroup() %>% dplyr::filter(! is.na(date)) %>% dplyr::select(date, name, class)
+
+data <- dplyr::left_join(features, classes, by = c("name", "date"))
+```
+
+
+### Train models
+```{r `model set up`, message = F, warning = F}
+multidplyr::cluster_assign_value(cluster, "tune", tune)
+
+models <- multidplyr::partition(data, date, cluster = cluster) %>% 
+  dplyr::do({
+    x <- dplyr::select(., -date); message(unique(x$date))
+    train <- sample.int(nrow(x), 0.80 * nrow(x))
+    test <- janitor::clean_names(x[-train, ]); train <- janitor::clean_names(x[train, ])
+    tryCatch({
+      xgb <- tune(dplyr::select(train, -name))
+      tibble::tibble(train = list(train), test = list(test), model = list(xgb))
+    }, error = function(e) tibble::tibble(train = list(train), test = list(test), model = NA))
+  }) %>% dplyr::collect() %>% dplyr::ungroup() %>% dplyr::arrange(date)
+
+saveRDS(models, file = "../data/models.rds")
+```
+
+
+### Positions
+```{r positions, message = F, warning = F, eval = T}
+models <- readRDS(file = "../data/models.rds") %>% dplyr::ungroup()
+
+positions <- dplyr::group_by(models, date) %>%
+  dplyr::do({ data <- .; model <- purrr::flatten(dplyr::select(data, model))
+      test <- purrr::flatten_dfr(dplyr::select(data, test))
+    tryCatch({dplyr::select(test, name) %>% dplyr::mutate(position = as.character(predict(model, test)$model))}, 
+             error = function(e) tibble::tibble(position = NA))
+  })
+
+positions
+```
+
+
+### Error rates
+```{r `error rates`, message = F, warning = F, eval = T}
+models <- readRDS(file = "../data/models.rds") %>% dplyr::ungroup()
+
+errors <- dplyr::group_by(models, date) %>%
+  dplyr::do({ data <- .; model <- purrr::flatten(dplyr::select(data, model))
+      test <- purrr::flatten_dfr(dplyr::select(data, test)) %>% dplyr::select(-c("name", "class"))
+      actual <- purrr::flatten_dfr(dplyr::select(data, test)) %>% dplyr::select(class) %>% purrr::flatten_chr() %>%
+        forcats::as_factor()
+      
+    tryCatch({tibble::tibble(`error rate` = ModelMetrics::ce(actual, predict(model, test)$model))}, 
+             error = function(e) tibble::tibble(`error rate` = NA))
+  })
+
+errors
+```
+
+
+
+
+

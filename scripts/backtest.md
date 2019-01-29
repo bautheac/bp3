@@ -1,13 +1,12 @@
-Setup
------
+Session setup
+-------------
 
-R is single-threated by default so I’m setting up a working cluster here
-to access computational power of all available cores on computer.
+R is single-threated by default so I'm setting up a working cluster here to access computational power of all available cores on computer.
 
 ``` r
-library(magrittr)
+library(magrittr); source("functions.r")
 
-knitr::opts_chunk$set(echo = T, cache = T, comment = "#>")
+knitr::opts_chunk$set(echo = T, eval = F, cache = F, comment = "#>")
 
 cluster <- multidplyr::create_cluster(parallel:::detectCores())
 ```
@@ -15,17 +14,12 @@ cluster <- multidplyr::create_cluster(parallel:::detectCores())
 Load
 ----
 
-I load the data into two dataframes here; one for historical data
-(“data\_price\_etf.csv” in the original github repo) and one for
-qualitative data (“data\_static\_etf\_com.csv” in the original github
-repo).  
-I limit the analysis to 100 randomly picked names here to keep things
-light as long as developping the code. Will run on the whole dataset
-when everything is fully developped and works well.
+I load the data into two dataframes here; one for historical data ("data\_price\_etf.csv" in the original github repo) and one for qualitative data ("data\_static\_etf\_com.csv" in the original github repo).
+I limit the analysis to 500 randomly picked names here to keep things light as long as developping the code. Will run on the whole dataset when everything is fully developped and works well.
 
 ``` r
 random_names <- names(readr::read_csv(file = "../data/data_historic_etf.csv", n_max = 1L))[-1L]
-random_names <- random_names[sample.int(NROW(random_names), 100L)]
+set.seed(0607L); random_names <- random_names[sample.int(NROW(random_names), 500L)]
 
 historic <- readr::read_csv(file = "../data/data_historic_etf.csv") %>%
   dplyr::mutate(date = as.Date(Date, origin = "1970-01-01")) %>% dplyr::arrange(date) %>%
@@ -44,30 +38,21 @@ multidplyr::cluster_assign_value(cluster, "horizons", horizons)
 Transform
 ---------
 
-To my understanding, feature engineering here involves calculating
-statistics as well as constructing TDA features at regular interval
-(monthly) from the time series data at regular interval (monthly). The
-resulting dataframe would contain, for each month, one sample per name
-(ETF) where features include time series statistics, TDA values as well
-as qualitative information (static dataframe).
+To my understanding, feature engineering here involves calculating statistics as well as constructing TDA features at regular interval (monthly) from the time series data at regular interval (monthly). The resulting dataframe would contain, for each month, one sample per name (ETF) where features include time series statistics, TDA values as well as qualitative information (static dataframe).
 
 ### Historic features
 
-I understand that time series statistics include return, high minus low
-as well as volatility over various time horizons including past week,
-past 4 weeks, past 8 weeks, past 13 weeks, past 26 weeks, past 52 weeks.
+I understand that time series statistics include return, high minus low as well as volatility over various time horizons including past week, past 4 weeks, past 8 weeks, past 13 weeks, past 26 weeks, past 52 weeks.
 
 #### Returns
 
-I calculate returns as the relative change in price over the
-above-mentioned time horizons here.
+I calculate returns as the relative change in price over the above-mentioned time horizons here.
 
 ``` r
-returns <- historic %>% dplyr::group_by(`name`) %>%
+returns <- dplyr::group_by(historic, `name`) %>%
   dplyr::do({data <- .; data.table::rbindlist(
     lapply(c(1L, horizons), function(x)
-      tibble::tibble(value = data$price / dplyr::lag(data$price, n = x) - 1L,
-                     date = data$date, 
+      tibble::tibble(value = data$price / dplyr::lag(data$price, n = x) - 1L, date = data$date, 
                      field = paste("return", x, ifelse(x > 1L, "weeks", "week"), sep = "."))
     ))}) %>% dplyr::select(name, field, date, value) %>% dplyr::filter(! is.na(value)) %>% 
   dplyr::mutate(field = forcats::as_factor(field)) %>% tidyr::spread(field, value)
@@ -75,15 +60,12 @@ returns <- historic %>% dplyr::group_by(`name`) %>%
 
 #### High - low
 
-I calculate high minus low by substracting the minimum observed value
-from the maximum observed value over the above-mentioned time horizons
-here.
+I calculate high minus low by substracting the minimum observed value from the maximum observed value over the above-mentioned time horizons here.
 
 ``` r
-HmL <- function(x) max(x) - min(x)
 multidplyr::cluster_assign_value(cluster, "HmL", HmL)
 
-HmL <- historic %>% multidplyr::partition(name, cluster = cluster) %>%
+HmL <- multidplyr::partition(historic, name, cluster = cluster) %>%
   dplyr::do({data <- .; data.table::rbindlist(
     lapply(horizons, function(x)
       tibble::tibble(value = tryCatch(tibbletime::rollify(HmL, window = x)(data$price),
@@ -97,11 +79,9 @@ HmL <- historic %>% multidplyr::partition(name, cluster = cluster) %>%
 
 #### Volatility
 
-I calculate volatility as the annualized standard deviation of 1-week
-returns over the above-mentioned time horizons here.
+I calculate volatility as the annualized standard deviation of 1-week returns over the above-mentioned time horizons here.
 
 ``` r
-volatility <- function(x) sd(x, na.rm = T) * sqrt(52L)
 multidplyr::cluster_assign_value(cluster, "volatility", volatility)
 
 volatility <- dplyr::select(returns, name, date, return = return.1.week) %>%
@@ -122,27 +102,19 @@ volatility <- dplyr::select(returns, name, date, return = return.1.week) %>%
 Ok, got it, see bellow if things look alright to you.
 
 ``` r
-TDA <- function(x) {
-  diag <- TDA::gridDiag(FUNvalues = x ,sublevel = F, printProgress = F)$diagram
-  values <- seq(min(diag[, c("Death", "Birth")]), max(diag[, c("Death", "Birth")]), 
-                length = 50L)
-  out <- c(TDA::landscape(diag, dimension = 0L, KK = 2L, tseq = values)[, 1L],
-           TDA::landscape(diag, dimension = 0L, KK = 3L, tseq = values)[, 1L])
-  
-  magrittr::set_names(as.list(out), paste("TDA", 1L:100L))
-}
 multidplyr::cluster_assign_value(cluster, "TDA", TDA)
 
-TDA <- historic %>% multidplyr::partition(name, cluster = cluster) %>%
-  dplyr::do({ data <- .; 
-  tryCatch(
-    data.table::rbindlist(
-      lapply(52L:nrow(data), function(x)
-        cbind(date = dplyr::filter(data, dplyr::row_number() == x)$date,
-              data.frame(TDA(dplyr::slice(data, (x - 51L):x)$price))))
-    ),
-    error = function(e) 
-      data.frame(magrittr::set_names(as.list(rep(NA, 101L)), c("date", paste("TDA", 1L:100L))))
+TDA <- multidplyr::partition(historic, name, cluster = cluster) %>%
+  dplyr::do({ 
+    data <- .
+    tryCatch(
+      data.table::rbindlist(
+        lapply(52L:nrow(data), function(x)
+          cbind(date = dplyr::filter(data, dplyr::row_number() == x)$date,
+                data.frame(TDA(dplyr::slice(data, (x - 51L):x)$price))))
+      ),
+      error = function(e) 
+        data.frame(magrittr::set_names(as.list(rep(NA, 101L)), c("date", paste("TDA", 1L:100L))))
     )
   }) %>% dplyr::collect()
 ```
@@ -150,7 +122,9 @@ TDA <- historic %>% multidplyr::partition(name, cluster = cluster) %>%
 #### Wrap up
 
 ``` r
-data <- Reduce(function(x, y) merge(x, y, by = c("name", "date"), all = T),
+parallel::stopCluster(cluster); gc()
+
+features <- Reduce(function(x, y) merge(x, y, by = c("name", "date"), all = T),
                list(returns, HmL, volatility, TDA)) %>%
   dplyr::mutate(year = lubridate::year(date), month = lubridate::month(date)) %>%
   dplyr::group_by(name, year, month) %>% dplyr::filter(dplyr::row_number() == n()) %>%
@@ -163,92 +137,122 @@ data <- Reduce(function(x, y) merge(x, y, by = c("name", "date"), all = T),
 And there is the features dataset; does everything looks alright to you?
 
 ``` r
-data %<>% dplyr::left_join(static, by = "name")
-head(data)
+features %<>% dplyr::left_join(static, by = "name")
+saveRDS(historic, file = "../data/historic.rds"); saveRDS(features, file = "../data/features.rds")
+head(features)
 ```
 
-    #> # A tibble: 6 x 135
-    #>   name  date       return.1.week return.4.weeks return.8.weeks
-    #>   <chr> <date>             <dbl>          <dbl>          <dbl>
-    #> 1 AAIT  2013-01-25     -0.0293          0.00146       -0.0256 
-    #> 2 AAIT  2013-02-22      0.0126          0.0230         0.0245 
-    #> 3 AAIT  2013-03-29      0.0273          0.00712        0.0180 
-    #> 4 AAIT  2013-04-26     -0.000709       -0.00424        0.00285
-    #> 5 AAIT  2013-05-31     -0.00791        -0.00586        0.0540 
-    #> 6 AAIT  2013-06-28      0.0233         -0.0579        -0.0634 
-    #> # ... with 130 more variables: return.13.weeks <dbl>,
-    #> #   return.26.weeks <dbl>, return.52.weeks <dbl>, HmL.4.weeks <dbl>,
-    #> #   HmL.8.weeks <dbl>, HmL.13.weeks <dbl>, HmL.26.weeks <dbl>,
-    #> #   HmL.52.weeks <dbl>, volatility.4.weeks <dbl>,
-    #> #   volatility.8.weeks <dbl>, volatility.13.weeks <dbl>,
-    #> #   volatility.26.weeks <dbl>, volatility.52.weeks <dbl>, TDA.1 <dbl>,
-    #> #   TDA.2 <dbl>, TDA.3 <dbl>, TDA.4 <dbl>, TDA.5 <dbl>, TDA.6 <dbl>,
-    #> #   TDA.7 <dbl>, TDA.8 <dbl>, TDA.9 <dbl>, TDA.10 <dbl>, TDA.11 <dbl>,
-    #> #   TDA.12 <dbl>, TDA.13 <dbl>, TDA.14 <dbl>, TDA.15 <dbl>, TDA.16 <dbl>,
-    #> #   TDA.17 <dbl>, TDA.18 <dbl>, TDA.19 <dbl>, TDA.20 <dbl>, TDA.21 <dbl>,
-    #> #   TDA.22 <dbl>, TDA.23 <dbl>, TDA.24 <dbl>, TDA.25 <dbl>, TDA.26 <dbl>,
-    #> #   TDA.27 <dbl>, TDA.28 <dbl>, TDA.29 <dbl>, TDA.30 <dbl>, TDA.31 <dbl>,
-    #> #   TDA.32 <dbl>, TDA.33 <dbl>, TDA.34 <dbl>, TDA.35 <dbl>, TDA.36 <dbl>,
-    #> #   TDA.37 <dbl>, TDA.38 <dbl>, TDA.39 <dbl>, TDA.40 <dbl>, TDA.41 <dbl>,
-    #> #   TDA.42 <dbl>, TDA.43 <dbl>, TDA.44 <dbl>, TDA.45 <dbl>, TDA.46 <dbl>,
-    #> #   TDA.47 <dbl>, TDA.48 <dbl>, TDA.49 <dbl>, TDA.50 <dbl>, TDA.51 <dbl>,
-    #> #   TDA.52 <dbl>, TDA.53 <dbl>, TDA.54 <dbl>, TDA.55 <dbl>, TDA.56 <dbl>,
-    #> #   TDA.57 <dbl>, TDA.58 <dbl>, TDA.59 <dbl>, TDA.60 <dbl>, TDA.61 <dbl>,
-    #> #   TDA.62 <dbl>, TDA.63 <dbl>, TDA.64 <dbl>, TDA.65 <dbl>, TDA.66 <dbl>,
-    #> #   TDA.67 <dbl>, TDA.68 <dbl>, TDA.69 <dbl>, TDA.70 <dbl>, TDA.71 <dbl>,
-    #> #   TDA.72 <dbl>, TDA.73 <dbl>, TDA.74 <dbl>, TDA.75 <dbl>, TDA.76 <dbl>,
-    #> #   TDA.77 <dbl>, TDA.78 <dbl>, TDA.79 <dbl>, TDA.80 <dbl>, TDA.81 <dbl>,
-    #> #   TDA.82 <dbl>, TDA.83 <dbl>, TDA.84 <dbl>, TDA.85 <dbl>, TDA.86 <dbl>,
-    #> #   TDA.87 <dbl>, ...
+Model
+-----
+
+### classes
 
 ``` r
-names(data)
+historic <- readRDS(file = "../data/historic.rds"); features <- readRDS(file = "../data/features.rds")
+
+threshold <- 0.1
+
+performance <- dplyr::mutate(historic, month = paste(lubridate::year(date), 
+                                                     ifelse(lubridate::month(date) < 10L,
+                                                            paste0(0L, lubridate::month(date)), lubridate::month(date)),
+                                                     sep = ".") %>% forcats::as_factor()) %>% 
+  dplyr::group_by(name, month) %>% dplyr::filter(dplyr::row_number() == n()) %>% dplyr::group_by(name) %>%
+  dplyr::mutate(performance = price / dplyr::lag(price, n = 1L) - 1L) %>% dplyr::select(date, name, performance) %>%
+  dplyr::ungroup() %>% dplyr::filter(! is.na(performance))
+
+classes <- dplyr::group_by(performance, date) %>% 
+  dplyr::do(data.frame(with(data = ., .[order(performance), ])) %>%
+              dplyr::mutate(class = dplyr::case_when(.$performance > quantile(.$performance, probs = (1L - threshold)) ~ "long",
+                                                     .$performance < quantile(.$performance, probs = threshold) ~ "short",
+                                                     T ~ "hold")
+              )
+  ) %>% dplyr::ungroup() %>% dplyr::group_by(name) %>% dplyr::mutate(date = dplyr::lag(date, n = 1L)) %>%
+  dplyr::ungroup() %>% dplyr::filter(! is.na(date)) %>% dplyr::select(date, name, class)
+
+data <- dplyr::left_join(features, classes, by = c("name", "date"))
 ```
 
-    #>   [1] "name"                "date"                "return.1.week"      
-    #>   [4] "return.4.weeks"      "return.8.weeks"      "return.13.weeks"    
-    #>   [7] "return.26.weeks"     "return.52.weeks"     "HmL.4.weeks"        
-    #>  [10] "HmL.8.weeks"         "HmL.13.weeks"        "HmL.26.weeks"       
-    #>  [13] "HmL.52.weeks"        "volatility.4.weeks"  "volatility.8.weeks" 
-    #>  [16] "volatility.13.weeks" "volatility.26.weeks" "volatility.52.weeks"
-    #>  [19] "TDA.1"               "TDA.2"               "TDA.3"              
-    #>  [22] "TDA.4"               "TDA.5"               "TDA.6"              
-    #>  [25] "TDA.7"               "TDA.8"               "TDA.9"              
-    #>  [28] "TDA.10"              "TDA.11"              "TDA.12"             
-    #>  [31] "TDA.13"              "TDA.14"              "TDA.15"             
-    #>  [34] "TDA.16"              "TDA.17"              "TDA.18"             
-    #>  [37] "TDA.19"              "TDA.20"              "TDA.21"             
-    #>  [40] "TDA.22"              "TDA.23"              "TDA.24"             
-    #>  [43] "TDA.25"              "TDA.26"              "TDA.27"             
-    #>  [46] "TDA.28"              "TDA.29"              "TDA.30"             
-    #>  [49] "TDA.31"              "TDA.32"              "TDA.33"             
-    #>  [52] "TDA.34"              "TDA.35"              "TDA.36"             
-    #>  [55] "TDA.37"              "TDA.38"              "TDA.39"             
-    #>  [58] "TDA.40"              "TDA.41"              "TDA.42"             
-    #>  [61] "TDA.43"              "TDA.44"              "TDA.45"             
-    #>  [64] "TDA.46"              "TDA.47"              "TDA.48"             
-    #>  [67] "TDA.49"              "TDA.50"              "TDA.51"             
-    #>  [70] "TDA.52"              "TDA.53"              "TDA.54"             
-    #>  [73] "TDA.55"              "TDA.56"              "TDA.57"             
-    #>  [76] "TDA.58"              "TDA.59"              "TDA.60"             
-    #>  [79] "TDA.61"              "TDA.62"              "TDA.63"             
-    #>  [82] "TDA.64"              "TDA.65"              "TDA.66"             
-    #>  [85] "TDA.67"              "TDA.68"              "TDA.69"             
-    #>  [88] "TDA.70"              "TDA.71"              "TDA.72"             
-    #>  [91] "TDA.73"              "TDA.74"              "TDA.75"             
-    #>  [94] "TDA.76"              "TDA.77"              "TDA.78"             
-    #>  [97] "TDA.79"              "TDA.80"              "TDA.81"             
-    #> [100] "TDA.82"              "TDA.83"              "TDA.84"             
-    #> [103] "TDA.85"              "TDA.86"              "TDA.87"             
-    #> [106] "TDA.88"              "TDA.89"              "TDA.90"             
-    #> [109] "TDA.91"              "TDA.92"              "TDA.93"             
-    #> [112] "TDA.94"              "TDA.95"              "TDA.96"             
-    #> [115] "TDA.97"              "TDA.98"              "TDA.99"             
-    #> [118] "TDA.100"             "issuer"              "expense.ratio"      
-    #> [121] "aum"                 "spread"              "asset.class"        
-    #> [124] "strategy"            "region"              "category"           
-    #> [127] "focus"               "niche"               "inverse"            
-    #> [130] "leveraged"           "etn"                 "index.prov"         
-    #> [133] "selection"           "weight.schm"         "act.p.sec"
+### Train models
 
-Moving on to working on modeling part.
+``` r
+multidplyr::cluster_assign_value(cluster, "tune", tune)
+
+models <- multidplyr::partition(data, date, cluster = cluster) %>% 
+  dplyr::do({
+    x <- dplyr::select(., -date); message(unique(x$date))
+    train <- sample.int(nrow(x), 0.80 * nrow(x))
+    test <- janitor::clean_names(x[-train, ]); train <- janitor::clean_names(x[train, ])
+    tryCatch({
+      xgb <- tune(dplyr::select(train, -name))
+      tibble::tibble(train = list(train), test = list(test), model = list(xgb))
+    }, error = function(e) tibble::tibble(train = list(train), test = list(test), model = NA))
+  }) %>% dplyr::collect() %>% dplyr::ungroup() %>% dplyr::arrange(date)
+
+saveRDS(models, file = "../data/models.rds")
+```
+
+### Positions
+
+``` r
+models <- readRDS(file = "../data/models.rds") %>% dplyr::ungroup()
+
+positions <- dplyr::group_by(models, date) %>%
+  dplyr::do({ data <- .; model <- purrr::flatten(dplyr::select(data, model))
+      test <- purrr::flatten_dfr(dplyr::select(data, test))
+    tryCatch({dplyr::select(test, name) %>% dplyr::mutate(position = as.character(predict(model, test)$model))}, 
+             error = function(e) tibble::tibble(position = NA))
+  })
+
+positions
+```
+
+    #> # A tibble: 1,035 x 3
+    #> # Groups:   date [12]
+    #>    date       name  position
+    #>    <date>     <chr> <chr>   
+    #>  1 2016-09-30 AGEM  hold    
+    #>  2 2016-09-30 AGRG  hold    
+    #>  3 2016-09-30 AXIT  hold    
+    #>  4 2016-09-30 BABS  hold    
+    #>  5 2016-09-30 BJK   hold    
+    #>  6 2016-09-30 BNO   hold    
+    #>  7 2016-09-30 BOIL  long    
+    #>  8 2016-09-30 BRAF  hold    
+    #>  9 2016-09-30 BSCH  hold    
+    #> 10 2016-09-30 BUNT  hold    
+    #> # … with 1,025 more rows
+
+### Error rates
+
+``` r
+models <- readRDS(file = "../data/models.rds") %>% dplyr::ungroup()
+
+errors <- dplyr::group_by(models, date) %>%
+  dplyr::do({ data <- .; model <- purrr::flatten(dplyr::select(data, model))
+      test <- purrr::flatten_dfr(dplyr::select(data, test)) %>% dplyr::select(-c("name", "class"))
+      actual <- purrr::flatten_dfr(dplyr::select(data, test)) %>% dplyr::select(class) %>% purrr::flatten_chr() %>%
+        forcats::as_factor()
+      
+    tryCatch({tibble::tibble(`error rate` = ModelMetrics::ce(actual, predict(model, test)$model))}, 
+             error = function(e) tibble::tibble(`error rate` = NA))
+  })
+
+errors
+```
+
+    #> # A tibble: 12 x 2
+    #> # Groups:   date [12]
+    #>    date       `error rate`
+    #>    <date>            <dbl>
+    #>  1 2016-09-30        0.191
+    #>  2 2016-10-28        0.202
+    #>  3 2016-11-25        0.213
+    #>  4 2016-12-30        0.106
+    #>  5 2017-01-27        0.170
+    #>  6 2017-02-24        0.202
+    #>  7 2017-03-31        0.160
+    #>  8 2017-04-28        0.245
+    #>  9 2017-05-26        0.202
+    #> 10 2017-06-30        0.191
+    #> 11 2017-07-28        0.234
+    #> 12 2017-08-25       NA
